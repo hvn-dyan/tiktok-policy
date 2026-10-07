@@ -109,15 +109,17 @@
       <label for="codeBox">Authorization code — copy rồi dán vào Terminal / app</label>
       <textarea id="codeBox" readonly></textarea>
       <div class="actions">
-        <button type="button" class="primary" id="btnCopy">Copy code</button>
+        <button type="button" class="primary" id="btnDownload">Tải file tiktok_auth_code.txt</button>
+        <button type="button" class="ghost" id="btnCopy">Copy code</button>
         <button type="button" class="ghost" id="btnCopyUrl">Copy cả URL</button>
       </div>
       <div id="toast">Đã copy vào clipboard.</div>
       <div class="meta" id="stateLine"></div>
       <div class="hint">
-        Quay lại Terminal đang chạy <code>uv run vf-tiktok-login</code>
-        (hoặc ô “Dán code” trên web uploader) và dán mã vừa copy, rồi Enter.
-        Có thể đóng tab này sau khi dán xong.
+        <strong>Khuyên dùng:</strong> bấm «Tải file…» → chuyển file vào thư mục project
+        (<code>tool-video/tiktok_auth_code.txt</code> → Terminal chạy
+        <code>uv run vf-tiktok-login</code> → nhấn Enter (để trống) để đọc file.
+        Code chỉ dùng được một lần.
       </div>
     </div>
   </div>
@@ -148,7 +150,22 @@
           document.execCommand("copy");
         }
         toast.style.display = "block";
+        toast.textContent = "Đã copy vào clipboard.";
         setTimeout(() => { toast.style.display = "none"; }, 2500);
+      }
+
+      function downloadCodeFile(text) {
+        const blob = new Blob([text + "\n"], { type: "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "tiktok_auth_code.txt";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        toast.style.display = "block";
+        toast.textContent = "Đã tải tiktok_auth_code.txt — đưa vào thư mục tool-video rồi Enter trên Terminal.";
+        setTimeout(() => { toast.style.display = "none"; }, 4000);
       }
 
       if (error) {
@@ -166,22 +183,22 @@
         return;
       }
 
-      // TikTok đôi khi trả code có ký tự đặc biệt đã encode — giữ nguyên giá trị từ query.
+      // URLSearchParams đã decode %2A → * ; giữ nguyên giá trị này khi gửi token.
       const decodedCode = code;
       card.classList.add("ok");
       title.textContent = "Đăng nhập thành công";
       message.textContent =
-        "Copy authorization code bên dưới và dán vào Terminal / ứng dụng Desktop hoặc Web Uploader.";
+        "Tải file code (an toàn hơn) hoặc copy rồi đưa vào ứng dụng / Terminal.";
       successBlock.style.display = "block";
       codeBox.value = decodedCode;
       stateLine.textContent =
         (state ? "state: " + state + " · " : "") +
         (scopes ? "scopes: " + decodeURIComponent(scopes) : "");
 
+      document.getElementById("btnDownload").addEventListener("click", () => downloadCodeFile(decodedCode));
       document.getElementById("btnCopy").addEventListener("click", () => copyText(decodedCode));
       document.getElementById("btnCopyUrl").addEventListener("click", () => copyText(window.location.href));
 
-      // Tự chọn sẵn để dễ Ctrl/Cmd+C trên mobile/desktop
       codeBox.focus();
       codeBox.select();
     })();
