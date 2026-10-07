@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TikTok OAuth Callback</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #121820;
+      --line: #2a3544;
+      --text: #e7ecf3;
+      --muted: #8a97a8;
+      --ok: #22c55e;
+      --err: #fe2c55;
+      --cyan: #25f4ee;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      background:
+        radial-gradient(900px 500px at 10% -10%, rgba(37,244,238,.08), transparent 55%),
+        radial-gradient(700px 400px at 100% 0%, rgba(254,44,85,.07), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: linear-gradient(180deg, #161d27, var(--card));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 28px 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    }
+    h1 { margin: 0 0 8px; font-size: 1.35rem; }
+    .ok h1 { color: var(--ok); }
+    .err h1 { color: var(--err); }
+    p { color: var(--muted); line-height: 1.55; margin: 0 0 16px; font-size: .95rem; }
+    label {
+      display: block;
+      font-size: .75rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #0c1219;
+      color: var(--text);
+      padding: 12px 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .82rem;
+      line-height: 1.45;
+      word-break: break-all;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: .9rem;
+    }
+    .primary {
+      background: linear-gradient(135deg, var(--cyan), #1ad4cf 40%, var(--err));
+      color: #061016;
+    }
+    .ghost {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .hint {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .meta { font-size: .8rem; color: var(--muted); margin-top: 10px; word-break: break-all; }
+    #toast {
+      display: none;
+      margin-top: 12px;
+      color: var(--ok);
+      font-size: .9rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <h1 id="title">Đang đọc callback…</h1>
+    <p id="message">Vui lòng chờ.</p>
+
+    <div id="successBlock" style="display:none">
+      <label for="codeBox">Authorization code — copy rồi dán vào Terminal / app</label>
+      <textarea id="codeBox" readonly></textarea>
+      <div class="actions">
+        <button type="button" class="primary" id="btnCopy">Copy code</button>
+        <button type="button" class="ghost" id="btnCopyUrl">Copy cả URL</button>
+      </div>
+      <div id="toast">Đã copy vào clipboard.</div>
+      <div class="meta" id="stateLine"></div>
+      <div class="hint">
+        Quay lại Terminal đang chạy <code>uv run vf-tiktok-login</code>
+        (hoặc ô “Dán code” trên web uploader) và dán mã vừa copy, rồi Enter.
+        Có thể đóng tab này sau khi dán xong.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const state = params.get("state");
+      const error = params.get("error");
+      const errorDescription = params.get("error_description");
+      const scopes = params.get("scopes");
+
+      const card = document.getElementById("card");
+      const title = document.getElementById("title");
+      const message = document.getElementById("message");
+      const successBlock = document.getElementById("successBlock");
+      const codeBox = document.getElementById("codeBox");
+      const stateLine = document.getElementById("stateLine");
+      const toast = document.getElementById("toast");
+
+      async function copyText(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (_) {
+          codeBox.focus();
+          codeBox.select();
+          document.execCommand("copy");
+        }
+        toast.style.display = "block";
+        setTimeout(() => { toast.style.display = "none"; }, 2500);
+      }
+
+      if (error) {
+        card.classList.add("err");
+        title.textContent = "Ủy quyền thất bại";
+        message.textContent = decodeURIComponent(errorDescription || error);
+        return;
+      }
+
+      if (!code) {
+        card.classList.add("err");
+        title.textContent = "Không thấy authorization code";
+        message.textContent =
+          "URL thiếu tham số ?code=. Hãy đăng nhập lại từ ứng dụng (vf-tiktok-login).";
+        return;
+      }
+
+      // TikTok đôi khi trả code có ký tự đặc biệt đã encode — giữ nguyên giá trị từ query.
+      const decodedCode = code;
+      card.classList.add("ok");
+      title.textContent = "Đăng nhập thành công";
+      message.textContent =
+        "Copy authorization code bên dưới và dán vào Terminal / ứng dụng Desktop hoặc Web Uploader.";
+      successBlock.style.display = "block";
+      codeBox.value = decodedCode;
+      stateLine.textContent =
+        (state ? "state: " + state + " · " : "") +
+        (scopes ? "scopes: " + decodeURIComponent(scopes) : "");
+
+      document.getElementById("btnCopy").addEventListener("click", () => copyText(decodedCode));
+      document.getElementById("btnCopyUrl").addEventListener("click", () => copyText(window.location.href));
+
+      // Tự chọn sẵn để dễ Ctrl/Cmd+C trên mobile/desktop
+      codeBox.focus();
+      codeBox.select();
+    })();
+  </script>
+</body>
+</html>
